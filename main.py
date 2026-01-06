@@ -13,22 +13,26 @@ matplotlib.rcParams['font.family'] = 'serif'
 # Constants
 CHUNK_SIZE = 4096
 
-def render_latex_to_png(latex_str, dpi=150, fontsize=16, color='white', pad_inches=0.0):
+def render_latex_to_png(latex_str, dpi=200, fontsize=20, color='white', pad_inches=0.0, mode='inline'):
     """
     Renders a LaTeX string to a PNG buffer using Matplotlib.
     Returns the bytes of the PNG file.
     """
     buf = io.BytesIO()
     
-    # We use a figure with a transparent background
-    # Small size, let tight_layout expand it
     fig = plt.figure(figsize=(0.01, 0.01), dpi=dpi)
     
     # Text config
-    # va='baseline' aligns text baseline with y=0.
-    # We use a strut \vphantom{Ag} to ensure consistent height/baseline for inline text,
-    # preventing "jumping" or sizing issues.
+    # Strut for vertical alignment consistency
+    if mode == 'inline':
+        # Use a strut to define the vertical extent of the line.
+        # This ensures that 'a' and 'g' and '\sum' all are rendered relative to this height.
+        # When we squash the final image into 1 row (r=1), the baseline should be consistent.
+        # alpha=0.0 makes it invisible but it affects the bbox.
+        fig.text(0.5, 0.5, "Ag)", fontsize=fontsize, color='white',
+                 ha='center', va='center', alpha=0.0)
     
+    # Render the actual math
     text = fig.text(0.5, 0.5, latex_str, fontsize=fontsize, color=color,
                     ha='center', va='center')
     
@@ -74,10 +78,18 @@ def serialize_gr_command(cmd, payload=None):
         ST = chr(27) + chr(92)
         return f"\x1b_G{cmd_str};{ST}"
 
-def display_image_kitty(png_bytes):
+def display_image_kitty(png_bytes, **kwargs):
     if not png_bytes:
         return ""
-    cmd = {'a': 'T', 'f': '100'}
+    
+    # Defaults
+    cmd = {
+        'a': 'T', # Transmit and display
+        'f': '100', # PNG
+    }
+    # Merge kwargs (e.g., r=1)
+    cmd.update(kwargs)
+    
     return serialize_gr_command(cmd, png_bytes)
 
 def parse_input(text):
@@ -87,11 +99,8 @@ def parse_input(text):
     - Inline Math ($...$)
     - Plain Text
     """
-    # Regex explanation:
-    # 1. (\$\$.*?\$\$)  -> Match double dollars (Block).
-    # 2. (\$(?!\$).*?\$) -> Match single dollar (Inline), NOT followed by another dollar.
-    
-    pattern = r'(\$\$.*?\$\$|\$(?!\$).*?\$)'
+    # Escaped dollars: \$\$
+    pattern = r'(\$\$.*?\$\$|\$.*?\$)'
     parts = re.split(pattern, text, flags=re.DOTALL)
     return [p for p in parts if p]
 
@@ -106,23 +115,14 @@ def main():
     for seg in segments:
         # Check for Block Math
         if seg.startswith('$$') and seg.endswith('$$') and len(seg) > 4:
-            # Strip $$
             latex_content = seg[2:-2]
-            
-            # Render Larger
-            # To address "starts from middle", we use ha='left' if possible, or just rely on terminal cursor.
-            # We already use ha='center' in render_latex_to_png.
-            # If the image is tight-cropped, 'center' just centers the text within the tight bbox.
-            # The resulting image is just the bounding box.
-            # When printed at the start of a line (\n), it is left-aligned.
-            # User might be seeing terminal centering if image is small?
-            # Or maybe they want it indented?
-            # "starts from the middle" usually means indented.
-            # If they want left, standard printing does left.
-            
-            png_bytes = render_latex_to_png(f"${latex_content}$", dpi=args.dpi, fontsize=24, color='#eeeeee', pad_inches=0.1)
+            # Render Block
+            # fontsize 24, high dpi.
+            png_bytes = render_latex_to_png(f"${latex_content}$", dpi=args.dpi, fontsize=24, color='#eeeeee', pad_inches=0.1, mode='block')
             
             if png_bytes:
+                # Block math: displayed as-is (native size or scaled by terminal if huge)
+                # We can enforce a height if we want, but usually native is fine for block.
                 img_seq = display_image_kitty(png_bytes)
                 sys.stdout.write(f"\n{img_seq}\n")
             else:
@@ -130,14 +130,15 @@ def main():
                 
         # Check for Inline Math
         elif seg.startswith('$') and seg.endswith('$') and len(seg) > 2:
-            # Strip $
             content = seg[1:-1]
             latex_wrapped = f"${content}$"
-            
-            # Render Standard size
-            png_bytes = render_latex_to_png(latex_wrapped, dpi=args.dpi, fontsize=16, color='#eeeeee', pad_inches=0.0)
+            # Render Inline
+            # Use r=1 to force it into a single row height, preventing line breaks.
+            # We use high DPI/fontsize in generation to keep it crisp when scaled down.
+            png_bytes = render_latex_to_png(latex_wrapped, dpi=200, fontsize=24, color='#eeeeee', pad_inches=0.0, mode='inline')
             if png_bytes:
-                img_seq = display_image_kitty(png_bytes)
+                # r=1 means 1 row height.
+                img_seq = display_image_kitty(png_bytes, r=1)
                 sys.stdout.write(img_seq)
             else:
                 sys.stdout.write(seg)
