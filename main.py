@@ -13,26 +13,18 @@ matplotlib.rcParams['font.family'] = 'serif'
 # Constants
 CHUNK_SIZE = 4096
 
-def render_latex_to_png(latex_str, dpi=200, fontsize=20, color='white', pad_inches=0.0, mode='inline'):
+def render_latex_to_png(latex_str, dpi=200, fontsize=28, color='#eeeeee', pad_inches=0.0):
     """
     Renders a LaTeX string to a PNG buffer using Matplotlib.
     Returns the bytes of the PNG file.
     """
     buf = io.BytesIO()
     
+    # Create a figure. We use a small size and rely on bbox_inches='tight'
     fig = plt.figure(figsize=(0.01, 0.01), dpi=dpi)
     
-    # Text config
-    # Strut for vertical alignment consistency
-    if mode == 'inline':
-        # Use a strut to define the vertical extent of the line.
-        # This ensures that 'a' and 'g' and '\sum' all are rendered relative to this height.
-        # When we squash the final image into 1 row (r=1), the baseline should be consistent.
-        # alpha=0.0 makes it invisible but it affects the bbox.
-        fig.text(0.5, 0.5, "Ag)", fontsize=fontsize, color='white',
-                 ha='center', va='center', alpha=0.0)
-    
-    # Render the actual math
+    # Render text.
+    # va='center' creates an image where the content is roughly centered vertically.
     text = fig.text(0.5, 0.5, latex_str, fontsize=fontsize, color=color,
                     ha='center', va='center')
     
@@ -82,12 +74,10 @@ def display_image_kitty(png_bytes, **kwargs):
     if not png_bytes:
         return ""
     
-    # Defaults
     cmd = {
-        'a': 'T', # Transmit and display
-        'f': '100', # PNG
+        'a': 'T',
+        'f': '100',
     }
-    # Merge kwargs (e.g., r=1)
     cmd.update(kwargs)
     
     return serialize_gr_command(cmd, png_bytes)
@@ -99,8 +89,11 @@ def parse_input(text):
     - Inline Math ($...$)
     - Plain Text
     """
-    # Escaped dollars: \$\$
-    pattern = r'(\$\$.*?\$\$|\$.*?\$)'
+    # Regex explanation:
+    # 1. (\$\$.*?\$\$)  -> Match double dollars (Block).
+    # 2. (\$(?!\$).*?\$) -> Match single dollar (Inline).
+    # We must escape dollars in regex: \$\$ and \$
+    pattern = r'(\$\$.*?\$\$|\$(?!\$).*?\$)'
     parts = re.split(pattern, text, flags=re.DOTALL)
     return [p for p in parts if p]
 
@@ -116,13 +109,10 @@ def main():
         # Check for Block Math
         if seg.startswith('$$') and seg.endswith('$$') and len(seg) > 4:
             latex_content = seg[2:-2]
-            # Render Block
-            # fontsize 24, high dpi.
-            png_bytes = render_latex_to_png(f"${latex_content}$", dpi=args.dpi, fontsize=24, color='#eeeeee', pad_inches=0.1, mode='block')
+            # Render Block - Large, with padding
+            png_bytes = render_latex_to_png(f"${latex_content}$", dpi=args.dpi, fontsize=32, color='#eeeeee', pad_inches=0.1)
             
             if png_bytes:
-                # Block math: displayed as-is (native size or scaled by terminal if huge)
-                # We can enforce a height if we want, but usually native is fine for block.
                 img_seq = display_image_kitty(png_bytes)
                 sys.stdout.write(f"\n{img_seq}\n")
             else:
@@ -132,13 +122,14 @@ def main():
         elif seg.startswith('$') and seg.endswith('$') and len(seg) > 2:
             content = seg[1:-1]
             latex_wrapped = f"${content}$"
+            
             # Render Inline
-            # Use r=1 to force it into a single row height, preventing line breaks.
-            # We use high DPI/fontsize in generation to keep it crisp when scaled down.
-            png_bytes = render_latex_to_png(latex_wrapped, dpi=200, fontsize=24, color='#eeeeee', pad_inches=0.0, mode='inline')
+            # Use natural height to ensure readability (no r=1 squashing).
+            # Padding helps center the symbol in the image.
+            # Terminals usually align the bottom of the image to the baseline.
+            png_bytes = render_latex_to_png(latex_wrapped, dpi=150, fontsize=28, color='#eeeeee', pad_inches=0.02)
             if png_bytes:
-                # r=1 means 1 row height.
-                img_seq = display_image_kitty(png_bytes, r=1)
+                img_seq = display_image_kitty(png_bytes)
                 sys.stdout.write(img_seq)
             else:
                 sys.stdout.write(seg)
@@ -147,7 +138,6 @@ def main():
         else:
             sys.stdout.write(seg)
             
-    # Trailing newline
     sys.stdout.write("\n")
 
 if __name__ == "__main__":
