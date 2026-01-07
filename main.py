@@ -244,17 +244,16 @@ def main():
                 # Estimate number of spaces needed.
                 num_spaces = int(w / cell_w) + 1
                 
-                # Calculate if this image is taller than the line
-                # If so, we need to ensure we add extra newlines when this line ends
-                rows_occupied = math.ceil(h / cell_h)
+                # Calculate vertical offset to center the image relative to the text row
+                # y_offset < 0 means move up
+                y_offset = (cell_h - h) // 2
+                
+                # Calculate if this image is taller than the line (considering the offset)
+                # We only care about how much it extends *downwards* for the extra newlines
+                bottom_y = h + y_offset
+                rows_occupied = math.ceil(bottom_y / cell_h)
                 extra_rows = max(0, rows_occupied - 1)
                 current_line_extra_rows = max(current_line_extra_rows, extra_rows)
-                
-                # Optional: Center the image vertically relative to the line?
-                # For now, we let it hang down (default), but the padding adds space at top.
-                # If we wanted to shift it up: y_offset = -int((h - cell_h) / 2)
-                # But shifting up risks overlapping previous line.
-                # We stick to default placement which is top-aligned to cursor.
 
                 # Strategy: write spaces, move cursor back, display image
                 spaces = " " * num_spaces
@@ -265,10 +264,27 @@ def main():
                 sys.stdout.write(f"\033[{num_spaces}D")
                 sys.stdout.flush()
 
-                # Display the image at this position
-                img_seq = display_image_kitty(png_bytes, inline=True, cell_h=cell_h)
-                sys.stdout.write(img_seq)
-                sys.stdout.flush()
+                # Handle negative y_offset by moving cursor up manually
+                # This avoids potential issues with negative Y in some terminal implementations
+                if y_offset < 0:
+                    rows_up = math.ceil(-y_offset / cell_h)
+                    final_y_offset = y_offset + (rows_up * cell_h)
+                    
+                    # Save cursor, move up, display image, restore cursor
+                    sys.stdout.write("\0337") # Save cursor (DEC)
+                    sys.stdout.write(f"\033[{rows_up}A") # Move up
+                    sys.stdout.flush()
+                    
+                    img_seq = display_image_kitty(png_bytes, inline=True, cell_h=cell_h, y_offset=final_y_offset)
+                    sys.stdout.write(img_seq)
+                    sys.stdout.flush()
+                    
+                    sys.stdout.write("\0338") # Restore cursor (DEC)
+                    sys.stdout.flush()
+                else:
+                    img_seq = display_image_kitty(png_bytes, inline=True, cell_h=cell_h, y_offset=y_offset)
+                    sys.stdout.write(img_seq)
+                    sys.stdout.flush()
 
                 # Move cursor forward past the image
                 sys.stdout.write(f"\033[{num_spaces}C")
