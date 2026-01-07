@@ -3,7 +3,7 @@ import base64
 import io
 import re
 import sys
-import os  # Added for file checking
+import os
 import struct
 import fcntl
 import termios
@@ -46,9 +46,6 @@ def get_png_dimensions(data):
     """
     if data[:8] != b'\x89PNG\r\n\x1a\n':
         return None
-    # IHDR is the first chunk.
-    # Offset 16: Width (4 bytes)
-    # Offset 20: Height (4 bytes)
     w, h = struct.unpack('>LL', data[16:24])
     return w, h
 
@@ -81,8 +78,9 @@ def render_latex_to_png(latex_str, dpi=200, fontsize=14, color="#eeeeee", paddin
             bbox_inches="tight",
             pad_inches=padding,
         )
-    except Exception as e:
-        sys.stderr.write(f"Error rendering latex: {e}\n")
+    except Exception:
+        # SILENT FAILURE:
+        # If rendering fails (e.g., unknown symbol), return None.
         return None
     finally:
         plt.close(fig)
@@ -135,7 +133,7 @@ def display_image_kitty(png_bytes, inline=False, cell_h=20, cols=None, rows=None
         "f": "100",
         "C": "1",  # Do not move cursor
     }
-    
+
     if cols is not None:
         cmd["c"] = cols
     if rows is not None:
@@ -160,6 +158,114 @@ def parse_input(text):
     return [p for p in parts if p]
 
 
+def print_buffered_line(line_buffer, cell_w, cell_h):
+    """
+    Analyzes a line (mix of text and math), calculates top/bottom padding required,
+    and prints it.
+    """
+    if not line_buffer:
+        return
+
+    # 1. Pre-Render and Calculate Dimensions
+    rendered_items = []
+    max_rows_up = 0
+    max_rows_down = 0
+
+    for item_type, content in line_buffer:
+        if item_type == 'text':
+            rendered_items.append({'type': 'text', 'content': content})
+
+        elif item_type == 'math':
+            # UPDATED: Scale factor increased to 0.85 for readability
+            scale_factor = 1
+            target_dpi = 200
+            target_fontsize = (cell_h * scale_factor * 72) / target_dpi
+
+            latex_wrapped = f"${content[1:-1]}$"
+
+            # Use 0.0 padding for tight bounding box
+            png_bytes = render_latex_to_png(
+                latex_wrapped, dpi=target_dpi, fontsize=target_fontsize,
+                color="#eeeeee", padding=0.0
+            )
+
+            if png_bytes:
+                w, h = get_png_dimensions(png_bytes)
+
+                # Center relative to line height
+                y_offset = (cell_h - h) // 2
+
+                # Threshold: Only add padding if overflow is > 20% of line height
+                overflow_threshold = cell_h * 0.2
+
+                rows_up = 0
+                if y_offset < 0:
+                    abs_overflow_up = abs(y_offset)
+                    if abs_overflow_up > overflow_threshold:
+                        rows_up = math.ceil(abs_overflow_up / cell_h)
+
+                bottom_y = h + y_offset
+                rows_down = 0
+                if bottom_y > cell_h:
+                    overflow_down = bottom_y - cell_h
+                    if overflow_down > overflow_threshold:
+                        rows_down = math.ceil(overflow_down / cell_h)
+
+                max_rows_up = max(max_rows_up, rows_up)
+                max_rows_down = max(max_rows_down, rows_down)
+
+                rendered_items.append({
+                    'type': 'math',
+                    'png': png_bytes,
+                    'w': w,
+                    'y_offset': y_offset
+                })
+            else:
+                # Fallback to raw text if render fails
+                rendered_items.append({'type': 'text', 'content': content})
+
+    # 2. Print Top Padding (if needed)
+    if max_rows_up > 0:
+        sys.stdout.write('\n' * max_rows_up)
+
+    # 3. Print the Line Content
+    for item in rendered_items:
+        if item['type'] == 'text':
+            sys.stdout.write(item['content'])
+
+        elif item['type'] == 'math':
+            w = item['w']
+            png = item['png']
+            y_offset = item['y_offset']
+
+            num_spaces = int(w / cell_w) + 1
+            spaces = " " * num_spaces
+
+            sys.stdout.write(spaces)
+            sys.stdout.write(f"\033[{num_spaces}D")  # Move cursor back
+
+            # If y_offset is negative (image goes up), we may need to adjust cursor
+            if y_offset < 0:
+                rows_up_cmd = math.ceil(-y_offset / cell_h)
+                final_y_offset = y_offset + (rows_up_cmd * cell_h)
+
+                sys.stdout.write("\0337")  # Save cursor position
+                sys.stdout.write(f"\033[{rows_up_cmd}A")  # Move cursor Up
+                sys.stdout.write(display_image_kitty(png, inline=True, cell_h=cell_h, y_offset=final_y_offset))
+                sys.stdout.write("\0338")  # Restore cursor position
+            else:
+                sys.stdout.write(display_image_kitty(png, inline=True, cell_h=cell_h, y_offset=y_offset))
+
+            sys.stdout.write(f"\033[{num_spaces}C")  # Move cursor forward
+
+    # 4. End the line and Print Bottom Padding (if needed)
+    sys.stdout.write('\n')
+    if max_rows_down > 0:
+        sys.stdout.write('\n' * max_rows_down)
+
+    sys.stdout.flush()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Render LaTeX to terminal.")
     parser.add_argument("input", help="Input text with LaTeX or path to file.")
@@ -181,25 +287,21 @@ def main():
     # --- FILE HANDLING END ---
 
     segments = parse_input(content)
-
-    # Get terminal metrics once
     cell_w, cell_h = get_terminal_cell_dims()
-    
-    # Track extra rows needed for the current line to clear tall inline images
-    current_line_extra_rows = 0
+
+    # Buffer to hold atoms for the current line
+    current_line_buffer = []
 
     for seg in segments:
         # --- BLOCK MATH ($$...$$) ---
         if seg.startswith("$$") and seg.endswith("$$") and len(seg) > 4:
-            # Before starting block math, ensure we clear any pending extra rows from previous inline math
-            if current_line_extra_rows > 0:
-                sys.stdout.write("\n" * current_line_extra_rows)
-                current_line_extra_rows = 0
-                
-            latex_content = seg[2:-2]
+            # Flush any pending inline text first
+            if current_line_buffer:
+                print_buffered_line(current_line_buffer, cell_w, cell_h)
+                current_line_buffer = []
 
-            # Big and spacious for block math
-            # Added padding to prevent overlap
+            latex_content = seg[2:-2]
+            # Block math gets 1.0 scale and slightly more padding
             png_bytes = render_latex_to_png(
                 f"${latex_content}$", dpi=200, fontsize=24, color="#eeeeee", padding=0.1
             )
@@ -207,133 +309,40 @@ def main():
             if png_bytes:
                 img_seq, rows_needed = display_image_kitty(png_bytes, inline=False, cell_h=cell_h)
 
-                sys.stdout.write("\n")  # Start on new line
+                # Make space
+                sys.stdout.write("\n")
+                for _ in range(rows_needed): sys.stdout.write("\n")
                 sys.stdout.flush()
 
-                # Reserve space - write blank lines
-                for _ in range(rows_needed):
-                    sys.stdout.write("\n")
-                sys.stdout.flush()
-
-                # Move cursor back up to draw the image
-                if rows_needed > 0:
-                    sys.stdout.write(f"\033[{rows_needed}A")  # Move up
-                sys.stdout.write("\r")  # Move to column 0
-                sys.stdout.flush()
-
-                # Draw the image
+                # Draw
+                if rows_needed > 0: sys.stdout.write(f"\033[{rows_needed}A")
+                sys.stdout.write("\r")
                 sys.stdout.write(img_seq)
-                sys.stdout.flush()
-
-                # Move cursor back down to after the reserved space
-                if rows_needed > 0:
-                    sys.stdout.write(f"\033[{rows_needed}B")  # Move down
-                sys.stdout.write("\r")  # Move to column 0
-                sys.stdout.flush()
+                if rows_needed > 0: sys.stdout.write(f"\033[{rows_needed}B")
+                sys.stdout.write("\r\n")
             else:
-                sys.stdout.write(seg)
+                sys.stdout.write(seg + "\n")
 
         # --- INLINE MATH ($...$) ---
         elif seg.startswith("$") and seg.endswith("$") and len(seg) > 2:
-            content = seg[1:-1]
-            latex_wrapped = f"${content}$"
+            current_line_buffer.append(('math', seg))
 
-            # Calculate optimal fontsize to match line height
-            # We aim for the image height to match the line height (cell_h)
-            # using a fixed high DPI.
-            # Factor 0.9 for compromise between size and fit (centering vs overlap)
-            target_dpi = 200
-            target_fontsize = (cell_h * 0.9 * 72) / target_dpi
-
-            # Padding 0.05
-            png_bytes = render_latex_to_png(
-                latex_wrapped,
-                dpi=target_dpi,
-                fontsize=target_fontsize,
-                color="#eeeeee",
-                padding=0.05
-            )
-
-            if png_bytes:
-                w, h = get_png_dimensions(png_bytes)
-
-                # Estimate number of spaces needed.
-                num_spaces = int(w / cell_w) + 1
-                
-                # Calculate centered offset
-                centered_offset = (cell_h - h) // 2
-                
-                # Clamp offset to prevent excessive top overlap
-                # Allow at most 15% of cell height overlap upwards
-                max_up_overlap = int(cell_h * 0.15)
-                y_offset = max(centered_offset, -max_up_overlap)
-                
-                # Calculate if this image is taller than the line (considering the offset)
-                # We only care about how much it extends *downwards* for the extra newlines
-                bottom_y = h + y_offset
-                rows_occupied = math.ceil(bottom_y / cell_h)
-                extra_rows = max(0, rows_occupied - 1)
-                current_line_extra_rows = max(current_line_extra_rows, extra_rows)
-
-                # Strategy: write spaces, move cursor back, display image
-                spaces = " " * num_spaces
-                sys.stdout.write(spaces)
-                sys.stdout.flush()
-
-                # Move cursor back to start of spaces
-                sys.stdout.write(f"\033[{num_spaces}D")
-                sys.stdout.flush()
-
-                # Handle negative y_offset by moving cursor up manually
-                # This avoids potential issues with negative Y in some terminal implementations
-                if y_offset < 0:
-                    rows_up = math.ceil(-y_offset / cell_h)
-                    final_y_offset = y_offset + (rows_up * cell_h)
-                    
-                    # Save cursor, move up, display image, restore cursor
-                    sys.stdout.write("\0337") # Save cursor (DEC)
-                    sys.stdout.write(f"\033[{rows_up}A") # Move up
-                    sys.stdout.flush()
-                    
-                    img_seq = display_image_kitty(png_bytes, inline=True, cell_h=cell_h, y_offset=final_y_offset)
-                    sys.stdout.write(img_seq)
-                    sys.stdout.flush()
-                    
-                    sys.stdout.write("\0338") # Restore cursor (DEC)
-                    sys.stdout.flush()
-                else:
-                    img_seq = display_image_kitty(png_bytes, inline=True, cell_h=cell_h, y_offset=y_offset)
-                    sys.stdout.write(img_seq)
-                    sys.stdout.flush()
-
-                # Move cursor forward past the image
-                sys.stdout.write(f"\033[{num_spaces}C")
-                sys.stdout.flush()
-            else:
-                sys.stdout.write(seg)
-
-        # --- PLAIN TEXT ---
+        # --- TEXT ---
         else:
-            # Split by newline to handle line tracking
+            # Text might contain newlines, which split the buffer
             parts = seg.split('\n')
             for i, part in enumerate(parts):
-                sys.stdout.write(part)
-                sys.stdout.flush()
-                
-                # If this is not the last part, we have a newline
-                if i < len(parts) - 1:
-                    sys.stdout.write('\n')
-                    # Apply clearance if needed
-                    if current_line_extra_rows > 0:
-                        sys.stdout.write('\n' * current_line_extra_rows)
-                        current_line_extra_rows = 0
-                    sys.stdout.flush()
+                if i > 0:
+                    # We hit a newline in the text -> Flush current buffer
+                    print_buffered_line(current_line_buffer, cell_w, cell_h)
+                    current_line_buffer = []
 
-    # Final newline and clearance
-    sys.stdout.write("\n")
-    if current_line_extra_rows > 0:
-        sys.stdout.write('\n' * current_line_extra_rows)
-    sys.stdout.flush()
+                if part:
+                    current_line_buffer.append(('text', part))
+
+    # Flush any remaining buffer at end of input
+    if current_line_buffer:
+        print_buffered_line(current_line_buffer, cell_w, cell_h)
 
 
 if __name__ == "__main__":
