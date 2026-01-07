@@ -3,6 +3,7 @@ import base64
 import io
 import re
 import sys
+import os  # Added for file checking
 import struct
 import fcntl
 import termios
@@ -233,11 +234,26 @@ def print_buffered_line(line_buffer, cell_w, cell_h):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Render LaTeX to terminal with padding.")
-    parser.add_argument("text", help="Input text with LaTeX.")
+    parser = argparse.ArgumentParser(description="Render LaTeX to terminal.")
+    parser.add_argument("input", help="Input text with LaTeX or path to file.")
     args = parser.parse_args()
 
-    segments = parse_input(args.text)
+    # --- FILE HANDLING START ---
+    content = ""
+    # Check if input is a valid file path
+    if os.path.isfile(args.input):
+        try:
+            with open(args.input, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except Exception as e:
+            sys.stderr.write(f"Error reading file: {e}\n")
+            sys.exit(1)
+    else:
+        # Treat as raw text
+        content = args.input
+    # --- FILE HANDLING END ---
+
+    segments = parse_input(content)
     cell_w, cell_h = get_terminal_cell_dims()
 
     # Buffer to hold atoms for the current line
