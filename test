@@ -1,4 +1,0 @@
-  Summary of Complexity
-   * Step 1: $O(VE^2)$ or $O(V^2E)$ depending on the max flow algorithm used.
-   * Step 2 (BFS/DFS): $O(V + E)$ to find $S$ and $T$.
-   * Total: Dominated by the initial max flow computation.
