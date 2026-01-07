@@ -6,6 +6,7 @@ import sys
 import struct
 import fcntl
 import termios
+import math
 
 import matplotlib
 
@@ -51,7 +52,7 @@ def get_png_dimensions(data):
     return w, h
 
 
-def render_latex_to_png(latex_str, dpi=200, fontsize=14, color="#eeeeee"):
+def render_latex_to_png(latex_str, dpi=200, fontsize=14, color="#eeeeee", padding=0.0):
     """
     Renders a LaTeX string to a PNG buffer.
     High DPI + Small Font = Sharp image that fits in the line.
@@ -77,7 +78,7 @@ def render_latex_to_png(latex_str, dpi=200, fontsize=14, color="#eeeeee"):
             dpi=dpi,
             transparent=True,
             bbox_inches="tight",
-            pad_inches=0.0,
+            pad_inches=padding,
         )
     except Exception as e:
         sys.stderr.write(f"Error rendering latex: {e}\n")
@@ -117,7 +118,7 @@ def serialize_gr_command(cmd, payload=None):
         return f"\x1b_G{cmd_str};{ST}"
 
 
-def display_image_kitty(png_bytes, inline=False, cell_h=20):
+def display_image_kitty(png_bytes, inline=False, cell_h=20, cols=None, rows=None, y_offset=0):
     """
     Display image using Kitty graphics protocol.
     Returns (image_sequence, rows_needed) for block images,
@@ -126,24 +127,28 @@ def display_image_kitty(png_bytes, inline=False, cell_h=20):
     if not png_bytes:
         return ("", 0) if not inline else ""
 
+    w, h = get_png_dimensions(png_bytes)
+
+    cmd = {
+        "a": "T",
+        "f": "100",
+        "C": "1",  # Do not move cursor
+    }
+    
+    if cols is not None:
+        cmd["c"] = cols
+    if rows is not None:
+        cmd["r"] = rows
+    if y_offset != 0:
+        cmd["Y"] = int(y_offset)
+
     if inline:
-        # For inline: use regular transmission
-        cmd = {
-            "a": "T",
-            "f": "100",
-            "C": "1",  # Do not move cursor
-        }
         return serialize_gr_command(cmd, png_bytes)
     else:
         # For block math, calculate how many terminal rows the image takes
-        w, h = get_png_dimensions(png_bytes)
-        rows_needed = max(1, int((h / cell_h) + 0.5))  # Round to nearest, minimum 1
+        # Use ceil to ensure we reserve enough space
+        rows_needed = max(1, math.ceil(h / cell_h))
 
-        cmd = {
-            "a": "T",
-            "f": "100",
-            "C": "1",  # Don't move cursor automatically
-        }
         return serialize_gr_command(cmd, png_bytes), rows_needed
 
 
@@ -163,26 +168,28 @@ def main():
 
     # Get terminal metrics once
     cell_w, cell_h = get_terminal_cell_dims()
+    
+    # Track extra rows needed for the current line to clear tall inline images
+    current_line_extra_rows = 0
 
     for seg in segments:
         # --- BLOCK MATH ($$...$$) ---
         if seg.startswith("$$") and seg.endswith("$$") and len(seg) > 4:
+            # Before starting block math, ensure we clear any pending extra rows from previous inline math
+            if current_line_extra_rows > 0:
+                sys.stdout.write("\n" * current_line_extra_rows)
+                current_line_extra_rows = 0
+                
             latex_content = seg[2:-2]
 
             # Big and spacious for block math
+            # Added padding to prevent overlap
             png_bytes = render_latex_to_png(
-                f"${latex_content}$", dpi=200, fontsize=24, color="#eeeeee"
+                f"${latex_content}$", dpi=200, fontsize=24, color="#eeeeee", padding=0.1
             )
 
             if png_bytes:
                 img_seq, rows_needed = display_image_kitty(png_bytes, inline=False, cell_h=cell_h)
-
-                # Strategy for block math:
-                # 1. Output newline to start fresh line
-                # 2. Reserve space by writing newlines for all rows needed
-                # 3. Move cursor back up to where we started
-                # 4. Draw the image
-                # 5. Move cursor back down to after the reserved space
 
                 sys.stdout.write("\n")  # Start on new line
                 sys.stdout.flush()
@@ -218,14 +225,17 @@ def main():
             # Calculate optimal fontsize to match line height
             # We aim for the image height to match the line height (cell_h)
             # using a fixed high DPI.
+            # Factor 1.0 for readability
             target_dpi = 200
-            target_fontsize = (cell_h * 72) / target_dpi
+            target_fontsize = (cell_h * 1.0 * 72) / target_dpi
 
+            # Increased padding to 0.05 for better spacing
             png_bytes = render_latex_to_png(
                 latex_wrapped,
                 dpi=target_dpi,
                 fontsize=target_fontsize,
                 color="#eeeeee",
+                padding=0.05
             )
 
             if png_bytes:
@@ -233,6 +243,18 @@ def main():
 
                 # Estimate number of spaces needed.
                 num_spaces = int(w / cell_w) + 1
+                
+                # Calculate if this image is taller than the line
+                # If so, we need to ensure we add extra newlines when this line ends
+                rows_occupied = math.ceil(h / cell_h)
+                extra_rows = max(0, rows_occupied - 1)
+                current_line_extra_rows = max(current_line_extra_rows, extra_rows)
+                
+                # Optional: Center the image vertically relative to the line?
+                # For now, we let it hang down (default), but the padding adds space at top.
+                # If we wanted to shift it up: y_offset = -int((h - cell_h) / 2)
+                # But shifting up risks overlapping previous line.
+                # We stick to default placement which is top-aligned to cursor.
 
                 # Strategy: write spaces, move cursor back, display image
                 spaces = " " * num_spaces
@@ -243,7 +265,7 @@ def main():
                 sys.stdout.write(f"\033[{num_spaces}D")
                 sys.stdout.flush()
 
-                # Display the image at this position (inline mode doesn't need row calculation)
+                # Display the image at this position
                 img_seq = display_image_kitty(png_bytes, inline=True, cell_h=cell_h)
                 sys.stdout.write(img_seq)
                 sys.stdout.flush()
@@ -256,12 +278,26 @@ def main():
 
         # --- PLAIN TEXT ---
         else:
-            sys.stdout.write(seg)
+            # Split by newline to handle line tracking
+            parts = seg.split('\n')
+            for i, part in enumerate(parts):
+                sys.stdout.write(part)
+                sys.stdout.flush()
+                
+                # If this is not the last part, we have a newline
+                if i < len(parts) - 1:
+                    sys.stdout.write('\n')
+                    # Apply clearance if needed
+                    if current_line_extra_rows > 0:
+                        sys.stdout.write('\n' * current_line_extra_rows)
+                        current_line_extra_rows = 0
+                    sys.stdout.flush()
 
-        # Flush immediately to keep order correct
-        sys.stdout.flush()
-
+    # Final newline and clearance
     sys.stdout.write("\n")
+    if current_line_extra_rows > 0:
+        sys.stdout.write('\n' * current_line_extra_rows)
+    sys.stdout.flush()
 
 
 if __name__ == "__main__":
