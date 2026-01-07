@@ -1,11 +1,23 @@
 [project]
 name = "latex-terminal"
 version = "0.1.0"
-description = "Add your description here"
+description = "Terminal-native LaTeX rendering using the Kitty graphics protocol."
 readme = "README.md"
-requires-python = ">=3.14"
-dependencies = [
-    "matplotlib>=3.10.8",
-    "numpy>=2.4.0",
-    "pillow>=12.1.0",
+requires-python = ">=3.10"
+license = { text = "MIT" }
+classifiers = [
+    "Environment :: Console",
+    "Topic :: Text Processing :: Markup :: LaTeX",
+    "Topic :: Multimedia :: Graphics",
 ]
+dependencies = [
+    "matplotlib>=3.8.0",
+]
+
+[project.scripts]
+# This allows you to run 'latex-terminal' from the command line
+latex-terminal = "latex_terminal:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
