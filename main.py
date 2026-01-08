@@ -29,6 +29,8 @@ except Exception:
 # Configuration
 INLINE_MATH_PADDING = 0.0
 BLOCK_MATH_PADDING = 0.1
+BLOCK_MATH_MARGIN_TOP = 1
+BLOCK_MATH_MARGIN_BOTTOM = 1
 BLOCK_MATH_FONT_SIZE = 24
 INLINE_MATH_SCALE_FACTOR = 1.0
 INLINE_MATH_DPI = 200
@@ -435,14 +437,24 @@ def main():
                     cols=display_cols, cell_w=cell_w
                 )
                 
-                sys.stdout.write("\n")
+                # Top Margin
+                for _ in range(BLOCK_MATH_MARGIN_TOP): sys.stdout.write("\n")
+
+                # Reserve space for image
                 for _ in range(rows_needed): sys.stdout.write("\n")
                 sys.stdout.flush()
+
+                # Move cursor up to start of image space
                 if rows_needed > 0: sys.stdout.write(f"\033[{rows_needed}A")
                 sys.stdout.write("\r")
                 sys.stdout.write(img_seq)
+
+                # Move cursor down to end of image space
                 if rows_needed > 0: sys.stdout.write(f"\033[{rows_needed}B")
-                sys.stdout.write("\r\n")
+                
+                # Bottom Margin
+                sys.stdout.write("\r")
+                for _ in range(BLOCK_MATH_MARGIN_BOTTOM): sys.stdout.write("\n")
             else:
                 sys.stdout.write(seg + "\n")
 
