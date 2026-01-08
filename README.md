@@ -40,7 +40,7 @@ This project is best installed and managed using [uv](https://github.com/astral-
 
 1.  Clone the repository:
     ```bash
-    git clone https://github.com/yourusername/latex-terminal.git
+    git clone https://github.com/GuyAzene/latex-terminal.git
     cd latex-terminal
     ```
 
@@ -51,7 +51,7 @@ This project is best installed and managed using [uv](https://github.com/astral-
 
 3.  Run the application:
     ```bash
-    uv run latex-terminal "Here is some math: $E=mc^2$"
+    uv run main.py "Here is some math: $E=mc^2$"
     ```
 
 ## Usage
@@ -61,7 +61,7 @@ You can run the script by passing the text directly or by providing a file path.
 ### Direct Text Input
 
 ```bash
-python main.py "Here is some inline math: $E=mc^2$. And here is a block equation: $$ \int_{0}^{\infty} e^{-x^2} dx = \frac{\sqrt{\pi}}{2} $$"
+uv run main.py "Here is some inline math: $E=mc^2$. And here is a block equation: $$ \int_{0}^{\infty} e^{-x^2} dx = \frac{\sqrt{\pi}}{2} $$"
 ```
 
 ### File Input
@@ -77,7 +77,7 @@ $$ ax^2 + bx + c = 0 $$
 Then run:
 
 ```bash
-python main.py math.txt
+uv run main.py math.txt
 ```
 
 ## How It Works
