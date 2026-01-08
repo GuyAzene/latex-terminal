@@ -28,6 +28,8 @@ except Exception:
 
 # Configuration
 INLINE_MATH_PADDING = 0.0
+INLINE_MATH_MARGIN_TOP = 0
+INLINE_MATH_MARGIN_BOTTOM = 0
 BLOCK_MATH_PADDING = 0.1
 BLOCK_MATH_MARGIN_TOP = 1
 BLOCK_MATH_MARGIN_BOTTOM = 1
@@ -295,12 +297,14 @@ def print_buffered_line(line_buffer, cell_w, cell_h):
     rendered_items = []
     max_rows_up = 0
     max_rows_down = 0
+    has_math = False
 
     for item_type, content in line_buffer:
         if item_type == 'text':
             rendered_items.append({'type': 'text', 'content': content})
 
         elif item_type == 'math':
+            has_math = True
             scale_factor = INLINE_MATH_SCALE_FACTOR
             target_dpi = INLINE_MATH_DPI
             target_fontsize = (cell_h * scale_factor * 72) / target_dpi
@@ -341,6 +345,10 @@ def print_buffered_line(line_buffer, cell_w, cell_h):
                 })
             else:
                 rendered_items.append({'type': 'text', 'content': content})
+
+    if has_math:
+        max_rows_up += INLINE_MATH_MARGIN_TOP
+        max_rows_down += INLINE_MATH_MARGIN_BOTTOM
 
     if max_rows_up > 0:
         sys.stdout.write('\n' * max_rows_up)
