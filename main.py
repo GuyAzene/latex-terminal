@@ -267,14 +267,21 @@ def sanitize_latex(content):
     Fixes common Matplotlib parsing issues.
     1. Removes newlines (fixes wrapping).
     2. Converts \le to \leq and \ge to \geq (fixes 'Unknown symbol').
+    3. Converts \lvert and \rvert to | (fixes 'Unknown symbol').
     """
     # Remove newlines
     content = content.replace('\n', ' ')
 
     # Robust replacement for \le -> \leq, ensuring we don't break \left or \length
     # Regex checks that \le is followed by a non-word character or end of string
-    content = re.sub(r'\\le(?!a-zA-Z)', r'\\leq', content)
-    content = re.sub(r'\\ge(?!a-zA-Z)', r'\\geq', content)
+    content = re.sub(r'\\le(?![a-zA-Z])', r'\\leq', content)
+    content = re.sub(r'\\ge(?![a-zA-Z])', r'\\geq', content)
+
+    # Fix absolute values for Matplotlib
+    content = content.replace(r'\left\lvert', r'\left|')
+    content = content.replace(r'\right\rvert', r'\right|')
+    content = content.replace(r'\lvert', '|')
+    content = content.replace(r'\rvert', '|')
 
     return content
 

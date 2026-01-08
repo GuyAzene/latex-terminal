@@ -21,6 +21,19 @@ A Python utility that renders LaTeX math equations directly in your terminal usi
     *   `matplotlib`
 *   **Terminal**: A terminal emulator that supports the Kitty graphics protocol (e.g., [Kitty](https://sw.kovidgoyal.net/kitty/), [WezTerm](https://wezfurlong.org/wezterm/), [Ghostty](https://ghostty.org/)).
 
+## External Dependencies (Optional but Recommended)
+
+For rendering complex LaTeX environments (like `align`, `gather`) or using advanced math symbols that `matplotlib` doesn't support, the script automatically falls back to system LaTeX tools.
+
+If you don't install these, the script will attempt to render everything with `matplotlib`, which works for most standard equations but may fail on complex layouts.
+
+**Recommended for macOS:**
+```bash
+brew install --cask mactex
+brew install imagemagick
+```
+(Ensure `pdflatex` and `convert` are in your PATH).
+
 ## Installation
 
 1.  Clone the repository:
