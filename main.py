@@ -27,7 +27,7 @@ except Exception:
     matplotlib.rcParams["font.family"] = "sans-serif"
 
 # Configuration
-INLINE_MATH_PADDING = 0.0
+INLINE_MATH_PADDING = 0.1
 INLINE_MATH_MARGIN_TOP = 0
 INLINE_MATH_MARGIN_BOTTOM = 0
 INLINE_MATH_SCALE_FACTOR = 1.0
