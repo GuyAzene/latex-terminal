@@ -15,9 +15,15 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# Set Font to Computer Modern (LaTeX standard)
-matplotlib.rcParams["mathtext.fontset"] = "cm"
-matplotlib.rcParams["font.family"] = "serif"
+# --- FIX: Switch from 'cm' to 'stix' or 'dejavusans' to fix missing symbol errors ---
+# 'stix' is a high-quality font set that looks like LaTeX but has better symbol support than 'cm'
+try:
+    matplotlib.rcParams["mathtext.fontset"] = "stix"
+    matplotlib.rcParams["font.family"] = "STIXGeneral"
+except Exception:
+    # Fallback to default if STIX is not found
+    matplotlib.rcParams["mathtext.fontset"] = "dejavusans"
+    matplotlib.rcParams["font.family"] = "sans-serif"
 
 # Constants
 CHUNK_SIZE = 4096
@@ -29,7 +35,6 @@ def get_terminal_cell_dims():
     Returns (width, height). Defaults to (10, 20) if it fails.
     """
     try:
-        # struct winsize { unsigned short ws_row; unsigned short ws_col; unsigned short ws_xpixel; unsigned short ws_ypixel; };
         buf = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, b'\0' * 8)
         ws_row, ws_col, ws_xpixel, ws_ypixel = struct.unpack('HHHH', buf)
 
@@ -41,9 +46,6 @@ def get_terminal_cell_dims():
 
 
 def get_png_dimensions(data):
-    """
-    Parses the PNG header to get width and height.
-    """
     if data[:8] != b'\x89PNG\r\n\x1a\n':
         return None
     w, h = struct.unpack('>LL', data[16:24])
@@ -51,25 +53,17 @@ def get_png_dimensions(data):
 
 
 def render_latex_to_png(latex_str, dpi=200, fontsize=14, color="#eeeeee", padding=0.0):
-    """
-    Renders a LaTeX string to a PNG buffer.
-    High DPI + Small Font = Sharp image that fits in the line.
-    """
     buf = io.BytesIO()
 
-    # Setup Figure
-    # We use a tiny figure size and let bbox_inches='tight' expand it.
+    # Create figure
     fig = plt.figure(figsize=(0.01, 0.01), dpi=dpi)
 
-    # Render text centered.
-    # 'va' (vertical alignment) is center to ensure equal padding on top/bottom
+    # Add text
     text = fig.text(
         0.5, 0.5, latex_str, fontsize=fontsize, color=color, ha="center", va="center"
     )
 
     try:
-        # Save with transparent background and tight bounding box
-        # pad_inches=0 is CRITICAL to remove the "box" around the math
         fig.savefig(
             buf,
             format="png",
@@ -78,10 +72,19 @@ def render_latex_to_png(latex_str, dpi=200, fontsize=14, color="#eeeeee", paddin
             bbox_inches="tight",
             pad_inches=padding,
         )
-    except Exception:
-        # SILENT FAILURE:
-        # If rendering fails (e.g., unknown symbol), return None.
-        return None
+    except Exception as e:
+        # Fallback: If 'stix' failed on specific symbols, try standard sans-serif once
+        try:
+            plt.close(fig)
+            matplotlib.rcParams["mathtext.fontset"] = "dejavusans"
+            fig = plt.figure(figsize=(0.01, 0.01), dpi=dpi)
+            fig.text(0.5, 0.5, latex_str, fontsize=fontsize, color=color, ha="center", va="center")
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", dpi=dpi, transparent=True, bbox_inches="tight", pad_inches=padding)
+            # Restore stix for next run
+            matplotlib.rcParams["mathtext.fontset"] = "stix"
+        except Exception:
+            return None
     finally:
         plt.close(fig)
 
@@ -98,19 +101,11 @@ def serialize_gr_command(cmd, payload=None):
         while len(b64_data) > 0:
             chunk = b64_data[:CHUNK_SIZE]
             b64_data = b64_data[CHUNK_SIZE:]
-
             m_val = 1 if len(b64_data) > 0 else 0
-
-            if output:
-                header = f"m={m_val};"
-            else:
-                header = f"{cmd_str},m={m_val};"
-
+            header = f"m={m_val};" if output else f"{cmd_str},m={m_val};"
             chunk_str = chunk.decode("ascii")
             ST = chr(27) + chr(92)
-            full_seq = "\x1b_G" + header + chunk_str + ST
-            output.append(full_seq)
-
+            output.append("\x1b_G" + header + chunk_str + ST)
         return "".join(output)
     else:
         ST = chr(27) + chr(92)
@@ -118,55 +113,49 @@ def serialize_gr_command(cmd, payload=None):
 
 
 def display_image_kitty(png_bytes, inline=False, cell_h=20, cols=None, rows=None, y_offset=0):
-    """
-    Display image using Kitty graphics protocol.
-    Returns (image_sequence, rows_needed) for block images,
-    or just image_sequence for inline images.
-    """
     if not png_bytes:
         return ("", 0) if not inline else ""
 
     w, h = get_png_dimensions(png_bytes)
-
-    cmd = {
-        "a": "T",
-        "f": "100",
-        "C": "1",  # Do not move cursor
-    }
-
-    if cols is not None:
-        cmd["c"] = cols
-    if rows is not None:
-        cmd["r"] = rows
-    if y_offset != 0:
-        cmd["Y"] = int(y_offset)
+    cmd = {"a": "T", "f": "100", "C": "1"}
+    if cols is not None: cmd["c"] = cols
+    if rows is not None: cmd["r"] = rows
+    if y_offset != 0: cmd["Y"] = int(y_offset)
 
     if inline:
         return serialize_gr_command(cmd, png_bytes)
     else:
-        # For block math, calculate how many terminal rows the image takes
-        # Use ceil to ensure we reserve enough space
         rows_needed = max(1, math.ceil(h / cell_h))
-
         return serialize_gr_command(cmd, png_bytes), rows_needed
 
 
 def parse_input(text):
-    # Regex to capture $$block$$ or $inline$
     pattern = r"(\$\$.*?\$\$|\$(?!\$).*?\$)"
     parts = re.split(pattern, text, flags=re.DOTALL)
     return [p for p in parts if p]
 
 
+def sanitize_latex(content):
+    r"""
+    Fixes common Matplotlib parsing issues.
+    1. Removes newlines (fixes wrapping).
+    2. Converts \le to \leq and \ge to \geq (fixes 'Unknown symbol').
+    """
+    # Remove newlines
+    content = content.replace('\n', ' ')
+
+    # Robust replacement for \le -> \leq, ensuring we don't break \left or \length
+    # Regex checks that \le is followed by a non-word character or end of string
+    content = re.sub(r'\\le(?![a-zA-Z])', r'\\leq', content)
+    content = re.sub(r'\\ge(?![a-zA-Z])', r'\\geq', content)
+
+    return content
+
+
 def print_buffered_line(line_buffer, cell_w, cell_h):
-    """
-    Analyzes a line (mix of text and math), calculates top/bottom padding required,
-    and prints it.
-    """
     if not line_buffer:
         return
 
-    # 1. Pre-Render and Calculate Dimensions
     rendered_items = []
     max_rows_up = 0
     max_rows_down = 0
@@ -176,14 +165,15 @@ def print_buffered_line(line_buffer, cell_w, cell_h):
             rendered_items.append({'type': 'text', 'content': content})
 
         elif item_type == 'math':
-            # UPDATED: Scale factor increased to 0.85 for readability
-            scale_factor = 1
+            scale_factor = 1.0
             target_dpi = 200
             target_fontsize = (cell_h * scale_factor * 72) / target_dpi
 
-            latex_wrapped = f"${content[1:-1]}$"
+            # Sanitize content inside the delimiters
+            inner_math = content[1:-1]
+            clean_math = sanitize_latex(inner_math)
+            latex_wrapped = f"${clean_math}$"
 
-            # Use 0.0 padding for tight bounding box
             png_bytes = render_latex_to_png(
                 latex_wrapped, dpi=target_dpi, fontsize=target_fontsize,
                 color="#eeeeee", padding=0.0
@@ -191,11 +181,7 @@ def print_buffered_line(line_buffer, cell_w, cell_h):
 
             if png_bytes:
                 w, h = get_png_dimensions(png_bytes)
-
-                # Center relative to line height
                 y_offset = (cell_h - h) // 2
-
-                # Threshold: Only add padding if overflow is > 20% of line height
                 overflow_threshold = cell_h * 0.2
 
                 rows_up = 0
@@ -215,50 +201,39 @@ def print_buffered_line(line_buffer, cell_w, cell_h):
                 max_rows_down = max(max_rows_down, rows_down)
 
                 rendered_items.append({
-                    'type': 'math',
-                    'png': png_bytes,
-                    'w': w,
-                    'y_offset': y_offset
+                    'type': 'math', 'png': png_bytes, 'w': w, 'y_offset': y_offset
                 })
             else:
-                # Fallback to raw text if render fails
                 rendered_items.append({'type': 'text', 'content': content})
 
-    # 2. Print Top Padding (if needed)
     if max_rows_up > 0:
         sys.stdout.write('\n' * max_rows_up)
 
-    # 3. Print the Line Content
     for item in rendered_items:
         if item['type'] == 'text':
             sys.stdout.write(item['content'])
-
         elif item['type'] == 'math':
             w = item['w']
             png = item['png']
             y_offset = item['y_offset']
-
             num_spaces = int(w / cell_w) + 1
             spaces = " " * num_spaces
 
             sys.stdout.write(spaces)
-            sys.stdout.write(f"\033[{num_spaces}D")  # Move cursor back
+            sys.stdout.write(f"\033[{num_spaces}D")
 
-            # If y_offset is negative (image goes up), we may need to adjust cursor
             if y_offset < 0:
                 rows_up_cmd = math.ceil(-y_offset / cell_h)
                 final_y_offset = y_offset + (rows_up_cmd * cell_h)
-
-                sys.stdout.write("\0337")  # Save cursor position
-                sys.stdout.write(f"\033[{rows_up_cmd}A")  # Move cursor Up
+                sys.stdout.write("\0337")
+                sys.stdout.write(f"\033[{rows_up_cmd}A")
                 sys.stdout.write(display_image_kitty(png, inline=True, cell_h=cell_h, y_offset=final_y_offset))
-                sys.stdout.write("\0338")  # Restore cursor position
+                sys.stdout.write("\0338")
             else:
                 sys.stdout.write(display_image_kitty(png, inline=True, cell_h=cell_h, y_offset=y_offset))
 
-            sys.stdout.write(f"\033[{num_spaces}C")  # Move cursor forward
+            sys.stdout.write(f"\033[{num_spaces}C")
 
-    # 4. End the line and Print Bottom Padding (if needed)
     sys.stdout.write('\n')
     if max_rows_down > 0:
         sys.stdout.write('\n' * max_rows_down)
@@ -268,17 +243,12 @@ def print_buffered_line(line_buffer, cell_w, cell_h):
 
 def main():
     parser = argparse.ArgumentParser(description="Render LaTeX to terminal.")
-    # CHANGE 1: make "input" optional (nargs='?') so the script doesn't fail if called without args
     parser.add_argument("input", nargs="?", help="Input text with LaTeX or path to file.")
     args = parser.parse_args()
 
     content = ""
-
-    # CHANGE 2: Check if data is being piped into stdin
     if not sys.stdin.isatty():
         content = sys.stdin.read()
-
-    # CHANGE 3: If not piped, check if an argument was provided
     elif args.input:
         if os.path.isfile(args.input):
             try:
@@ -288,45 +258,33 @@ def main():
                 sys.stderr.write(f"Error reading file: {e}\n")
                 sys.exit(1)
         else:
-            # Treat argument as raw text
             content = args.input
-
     else:
-        # No input from pipe OR arguments
-        sys.stderr.write("Error: No input provided. Please pipe text or provide an argument.\n")
-        parser.print_help()
+        sys.stderr.write("Error: No input provided.\n")
         sys.exit(1)
 
-    # --- PROCESSING LOGIC (Remains unchanged) ---
     segments = parse_input(content)
     cell_w, cell_h = get_terminal_cell_dims()
-
-    # Buffer to hold atoms for the current line
     current_line_buffer = []
 
     for seg in segments:
-        # --- BLOCK MATH ($$...$$) ---
         if seg.startswith("$$") and seg.endswith("$$") and len(seg) > 4:
-            # Flush any pending inline text first
             if current_line_buffer:
                 print_buffered_line(current_line_buffer, cell_w, cell_h)
                 current_line_buffer = []
 
-            latex_content = seg[2:-2]
-            # Block math gets 1.0 scale and slightly more padding
+            # Sanitize block math
+            clean_content = sanitize_latex(seg[2:-2])
+
             png_bytes = render_latex_to_png(
-                f"${latex_content}$", dpi=200, fontsize=24, color="#eeeeee", padding=0.1
+                f"${clean_content}$", dpi=200, fontsize=24, color="#eeeeee", padding=0.1
             )
 
             if png_bytes:
                 img_seq, rows_needed = display_image_kitty(png_bytes, inline=False, cell_h=cell_h)
-
-                # Make space
                 sys.stdout.write("\n")
                 for _ in range(rows_needed): sys.stdout.write("\n")
                 sys.stdout.flush()
-
-                # Draw
                 if rows_needed > 0: sys.stdout.write(f"\033[{rows_needed}A")
                 sys.stdout.write("\r")
                 sys.stdout.write(img_seq)
@@ -335,24 +293,17 @@ def main():
             else:
                 sys.stdout.write(seg + "\n")
 
-        # --- INLINE MATH ($...$) ---
         elif seg.startswith("$") and seg.endswith("$") and len(seg) > 2:
             current_line_buffer.append(('math', seg))
-
-        # --- TEXT ---
         else:
-            # Text might contain newlines, which split the buffer
             parts = seg.split('\n')
             for i, part in enumerate(parts):
                 if i > 0:
-                    # We hit a newline in the text -> Flush current buffer
                     print_buffered_line(current_line_buffer, cell_w, cell_h)
                     current_line_buffer = []
-
                 if part:
                     current_line_buffer.append(('text', part))
 
-    # Flush any remaining buffer at end of input
     if current_line_buffer:
         print_buffered_line(current_line_buffer, cell_w, cell_h)
 
