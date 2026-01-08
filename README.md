@@ -36,15 +36,22 @@ brew install imagemagick
 
 ## Installation
 
+This project is best installed and managed using [uv](https://github.com/astral-sh/uv).
+
 1.  Clone the repository:
     ```bash
     git clone https://github.com/yourusername/latex-terminal.git
     cd latex-terminal
     ```
 
-2.  Install dependencies:
+2.  Sync dependencies using `uv`:
     ```bash
-    pip install matplotlib
+    uv sync
+    ```
+
+3.  Run the application:
+    ```bash
+    uv run latex-terminal "Here is some math: $E=mc^2$"
     ```
 
 ## Usage
