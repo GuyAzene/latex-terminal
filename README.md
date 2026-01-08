@@ -51,7 +51,7 @@ This project is best installed and managed using [uv](https://github.com/astral-
 
 3.  Run the application:
     ```bash
-    uv run main.py "Here is some math: $E=mc^2$"
+    uv run latex-terminal 'Here is some math: $E=mc^2$'
     ```
 
 ## Usage
@@ -60,8 +60,10 @@ You can run the script by passing the text directly or by providing a file path.
 
 ### Direct Text Input
 
+**Note:** Always use single quotes (`'`) around text with `$` signs to prevent your shell from interpreting them as variables.
+
 ```bash
-uv run main.py "Here is some inline math: $E=mc^2$. And here is a block equation: $$ \int_{0}^{\infty} e^{-x^2} dx = \frac{\sqrt{\pi}}{2} $$"
+uv run latex-terminal 'Here is some inline math: $E=mc^2$. And here is a block equation: $$ \int_{0}^{\infty} e^{-x^2} dx = \frac{\sqrt{\pi}}{2} $$'
 ```
 
 ### File Input
@@ -77,7 +79,7 @@ $$ ax^2 + bx + c = 0 $$
 Then run:
 
 ```bash
-uv run main.py math.txt
+uv run latex-terminal math.txt
 ```
 
 ## How It Works
@@ -95,6 +97,15 @@ You can tweak the rendering parameters in `main.py`:
 *   `dpi`: Adjusts the resolution of the generated images.
 *   `fontsize`: Base font size for rendering.
 *   `padding`: Padding around the rendered equations.
+
+## Troubleshooting
+
+**Issue: Shell tries to expand `$E` or other variables.**
+
+If you use double quotes (`"`) around your input, your shell (bash/zsh) will try to interpret `$E` as a variable. Use single quotes (`'`) to treat the input as a literal string.
+
+*   **Bad:** `latex-terminal "Energy is $E$"` (Shell replaces `$E` with empty string or variable value)
+*   **Good:** `latex-terminal 'Energy is $E$'`
 
 ## License
 
