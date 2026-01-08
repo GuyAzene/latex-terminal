@@ -1,0 +1,27 @@
+**Big O** ($O$) and **Little o** ($o$) notations both describe the asymptotic behavior of functions, but they differ in strictness regarding the upper bound.
+
+### Big O Notation ($O$)
+Represents an **asymptotic upper bound**.
+$f(n) = O(g(n))$ means that $f(n)$ grows at most as fast as $g(n)$ for large $n$. It allows for the possibility that they grow at the same rate.
+
+Formal definition:
+$$ \exists c > 0, n_0 \text{ such that } \forall n \ge n_0, |f(n)| \le c|g(n)| $$
+
+### Little o Notation ($o$)
+Represents a **strict asymptotic upper bound**.
+$f(n) = o(g(n))$ means that $f(n)$ grows **strictly slower** than $g(n)$.
+
+Formal definition:
+$$ \forall c > 0, \exists n_0 \text{ such that } \forall n \ge n_0, |f(n)| < c|g(n)| $$
+
+### Comparison using Limits
+The difference is clearest when looking at the limit of their ratio:
+
+$$ \lim_{n \to \infty} \left| \frac{f(n)}{g(n)} \right| = L $$
+
+*   If $L < \infty$ (a constant), then $f(n) = O(g(n))$.
+*   If $L = 0$, then $f(n) = o(g(n))$.
+
+**Example:**
+*   $2n = O(n)$ is true, but $2n = o(n)$ is false.
+*   $n = o(n^2)$ is true (and thus $n = O(n^2)$ is also true).

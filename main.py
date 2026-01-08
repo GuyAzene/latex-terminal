@@ -268,24 +268,36 @@ def print_buffered_line(line_buffer, cell_w, cell_h):
 
 def main():
     parser = argparse.ArgumentParser(description="Render LaTeX to terminal.")
-    parser.add_argument("input", help="Input text with LaTeX or path to file.")
+    # CHANGE 1: make "input" optional (nargs='?') so the script doesn't fail if called without args
+    parser.add_argument("input", nargs="?", help="Input text with LaTeX or path to file.")
     args = parser.parse_args()
 
-    # --- FILE HANDLING START ---
     content = ""
-    # Check if input is a valid file path
-    if os.path.isfile(args.input):
-        try:
-            with open(args.input, 'r', encoding='utf-8') as f:
-                content = f.read()
-        except Exception as e:
-            sys.stderr.write(f"Error reading file: {e}\n")
-            sys.exit(1)
-    else:
-        # Treat as raw text
-        content = args.input
-    # --- FILE HANDLING END ---
 
+    # CHANGE 2: Check if data is being piped into stdin
+    if not sys.stdin.isatty():
+        content = sys.stdin.read()
+
+    # CHANGE 3: If not piped, check if an argument was provided
+    elif args.input:
+        if os.path.isfile(args.input):
+            try:
+                with open(args.input, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            except Exception as e:
+                sys.stderr.write(f"Error reading file: {e}\n")
+                sys.exit(1)
+        else:
+            # Treat argument as raw text
+            content = args.input
+
+    else:
+        # No input from pipe OR arguments
+        sys.stderr.write("Error: No input provided. Please pipe text or provide an argument.\n")
+        parser.print_help()
+        sys.exit(1)
+
+    # --- PROCESSING LOGIC (Remains unchanged) ---
     segments = parse_input(content)
     cell_w, cell_h = get_terminal_cell_dims()
 
