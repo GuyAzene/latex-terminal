@@ -73,16 +73,21 @@ def render_latex_fallback(latex_str, dpi=200, fontsize=14, color="#eeeeee", padd
     # \fontsize{sz}{skip} sets the font size
     # Add common color names support
     tex_content = r"""
-\documentclass[preview]{standalone}
+\documentclass{article}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage[dvipsnames,svgnames,x11names]{xcolor}
 \usepackage{graphicx}
+\usepackage[active,tightpage]{preview}
+\setlength\PreviewBorder{0pt}
+
 \begin{document}
 \fontsize{%f}{%f}\selectfont
 \definecolor{currcolor}{HTML}{%s}
 \color{currcolor}
+\begin{preview}
 %s
+\end{preview}
 \end{document}
 """ % (fontsize, fontsize * 1.2, color_val, final_latex)
 
