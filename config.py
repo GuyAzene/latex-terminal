@@ -25,11 +25,11 @@ INLINE_MATH_DPI = 200
 BLOCK_MATH_PADDING = 0.1
 
 # Font size for block equations (usually larger than inline).
-BLOCK_MATH_FONT_SIZE = 24
+BLOCK_MATH_FONT_SIZE = 22
 
 # Vertical margins (in newlines) reserved around the block equation.
-BLOCK_MATH_MARGIN_TOP = 1
-BLOCK_MATH_MARGIN_BOTTOM = 1
+BLOCK_MATH_MARGIN_TOP = 0
+BLOCK_MATH_MARGIN_BOTTOM = 0
 
 # Resolution for block math images.
 BLOCK_MATH_DPI = 200
