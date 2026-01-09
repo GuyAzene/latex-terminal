@@ -69,51 +69,29 @@ def render_latex_fallback(latex_str, dpi=200, fontsize=14, color="#eeeeee", padd
     # Use the sanitizer logic for fallback rendering (handles environment substitution)
     final_latex = sanitize_for_fallback(latex_str)
     
-        # Check if this is a block environment (starts with \begin) or inline math
-    
-        if final_latex.strip().startswith(r'\begin{'):
-    
-            # BLOCK MODE: Use 'standalone' with preview option.
-    
-            # This matches the behavior of the "old working version" which handled flalign correctly.
-    
-            tex_content = r"""
-    
-    \documentclass[preview]{standalone}
-    
-    \usepackage{amsmath}
-    
-    \usepackage{amssymb}
-    
-    \usepackage[dvipsnames,svgnames,x11names]{xcolor}
-    
-    \usepackage{graphicx}
-    
-    
-    
-    \begin{document}
-    
-    \fontsize{%f}{%f}\selectfont
-    
-    \definecolor{currcolor}{HTML}{%s}
-    
-    \color{currcolor}
-    
-    %s
-    
-    \end{document}
-    
-    """ % (fontsize, fontsize * 1.2, color_val, final_latex)
-    
-        else:
-    
-            # INLINE MODE: Use 'article' + 'preview'.
-    
-            # This is robust for long inline formulas and prevents them from wrapping.
-    
-            # We explicitly set a huge paper width to effectively disable line breaking.
-    
-            tex_content = r"""
+    # Check if this is a block environment (starts with \begin) or inline math
+    if final_latex.strip().startswith(r'\begin{'):
+        # BLOCK MODE: Use 'standalone' with preview option.
+        # This matches the behavior of the "old working version" which handled flalign correctly.
+        tex_content = r"""
+\documentclass[preview]{standalone}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[dvipsnames,svgnames,x11names]{xcolor}
+\usepackage{graphicx}
+
+\begin{document}
+\fontsize{%f}{%f}\selectfont
+\definecolor{currcolor}{HTML}{%s}
+\color{currcolor}
+%s
+\end{document}
+""" % (fontsize, fontsize * 1.2, color_val, final_latex)
+    else:
+        # INLINE MODE: Use 'article' + 'preview'.
+        # This is robust for long inline formulas and prevents them from wrapping.
+        # We explicitly set a huge paper width to effectively disable line breaking.
+        tex_content = r"""
 \documentclass{article}
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -133,7 +111,6 @@ def render_latex_fallback(latex_str, dpi=200, fontsize=14, color="#eeeeee", padd
 """ % (fontsize, fontsize * 1.2, color_val, final_latex)
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        # ... (rest of the function remains identical)
         tex_path = os.path.join(temp_dir, "equation.tex")
         pdf_path = os.path.join(temp_dir, "equation.pdf")
         png_path = os.path.join(temp_dir, "equation.png")
@@ -141,6 +118,9 @@ def render_latex_fallback(latex_str, dpi=200, fontsize=14, color="#eeeeee", padd
         with open(tex_path, "w", encoding="utf-8") as f:
             f.write(tex_content)
 
+        # Run pdflatex
+        # We allow it to fail (non-zero exit) as long as PDF is generated
+        # because of minor errors like undefined colors (which fallback to black) or font warnings.
         subprocess.run(
             ["pdflatex", "-interaction=nonstopmode", "-output-directory", temp_dir, tex_path],
             check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -149,6 +129,7 @@ def render_latex_fallback(latex_str, dpi=200, fontsize=14, color="#eeeeee", padd
         if not os.path.exists(pdf_path):
             return None
 
+        # Convert PDF to PNG
         pad_px = int(padding * dpi)
         cmd = ["convert", "-density", str(dpi), "-background", "none"]
         if pad_px > 0:
