@@ -62,7 +62,7 @@ def sanitize_for_fallback(latex_str):
         inner = inner[1:-1]
         
     # Suppress numbering
-    env_pattern = r"\\begin{(align|equation|gather|dmath|multline|eqnarray)}"
+    env_pattern = r"\\begin{(align|equation|gather|dmath|multline|eqnarray|flalign)}"
     
     def replacer(match):
         env_name = match.group(1)
@@ -70,7 +70,7 @@ def sanitize_for_fallback(latex_str):
 
     if re.search(env_pattern, inner):
         final_latex = re.sub(env_pattern, replacer, inner)
-        final_latex = re.sub(r"\\end\{(align|equation|gather|dmath|multline|eqnarray)\}", lambda m: f"\\end{{{m.group(1)}*}}", final_latex)
+        final_latex = re.sub(r"\\end\{(align|equation|gather|dmath|multline|eqnarray|flalign)\}", lambda m: f"\\end{{{m.group(1)}*}}", final_latex)
     else:
         final_latex = inner
 
