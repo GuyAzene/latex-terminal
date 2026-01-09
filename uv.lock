@@ -341,16 +341,12 @@ name = "latex-terminal"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "arabic-reshaper" },
     { name = "matplotlib" },
-    { name = "python-bidi" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "arabic-reshaper", specifier = ">=3.0.0" },
     { name = "matplotlib", specifier = ">=3.8.0" },
-    { name = "python-bidi", specifier = ">=0.4.2" },
 ]
 
 [[package]]
