@@ -17,6 +17,11 @@ import matplotlib
 # Force non-interactive backend
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from latex_sanitizer import sanitize_latex, sanitize_for_fallback
+
+# Optional BiDi support
+try:
+    import arabic_reshaper
 
 # --- FIX: Switch from 'cm' to 'stix' or 'dejavusans' to fix missing symbol errors ---
 try:
@@ -75,29 +80,8 @@ def render_latex_fallback(latex_str, dpi=200, fontsize=14, color="#eeeeee", padd
 
     color_val = color.lstrip('#')
     
-    # Strip wrapping $ to check for environments
-    inner = latex_str.strip()
-    if inner.startswith('$') and inner.endswith('$'):
-        inner = inner[1:-1]
-    if inner.startswith('$') and inner.endswith('$'): # Double dollar case
-        inner = inner[1:-1]
-        
-    # Check for display math environments and suppress numbering
-    # We convert align -> align*, equation -> equation*, etc.
-    # This prevents equation numbers (1, 2, 3...) which cause wide images and bad scaling.
-    env_pattern = r"\\begin\{(align|equation|gather|dmath|multline|eqnarray)\}"
-    
-    def replacer(match):
-        env_name = match.group(1)
-        return f"\\begin{{{env_name}*}}"
-
-    if re.search(env_pattern, inner):
-        # Replace \begin{env} with \begin{env*}
-        final_latex = re.sub(env_pattern, replacer, inner)
-        # Replace \end{env} with \end{env*}
-        final_latex = re.sub(r"\\end\{(align|equation|gather|dmath|multline|eqnarray)\}", lambda m: f"\\end{{{m.group(1)}*}}", final_latex)
-    else:
-        final_latex = inner
+    # Use the sanitizer logic for fallback rendering (handles environment substitution)
+    final_latex = sanitize_for_fallback(latex_str)
     
     # Use standalone to get tight bounding box
     # \fontsize{sz}{skip} sets the font size
@@ -264,35 +248,6 @@ def parse_input(text):
     pattern = r"(\$\$.*?\$\$|\$(?!\\$).*?\$)"
     parts = re.split(pattern, text, flags=re.DOTALL)
     return [p for p in parts if p]
-
-
-def sanitize_latex(content):
-    r"""
-    Fixes common Matplotlib parsing issues.
-    1. Removes newlines (fixes wrapping).
-    2. Converts \le to \leq and \ge to \geq (fixes 'Unknown symbol').
-    3. Converts \lvert and \rvert to | (fixes 'Unknown symbol').
-    """
-    # Remove newlines
-    content = content.replace('\n', ' ')
-
-    # Robust replacement for \le -> \leq, ensuring we don't break \left or \length
-    # Regex checks that \le is followed by a non-word character or end of string
-    content = re.sub(r'\\le(?![a-zA-Z])', r'\\leq', content)
-    content = re.sub(r'\\ge(?![a-zA-Z])', r'\\geq', content)
-
-    # Fix absolute values for Matplotlib
-    content = content.replace(r'\left\lvert', r'\left|')
-    content = content.replace(r'\right\rvert', r'\right|')
-    content = content.replace(r'\lvert', '|')
-    content = content.replace(r'\rvert', '|')
-
-    # Map common arrows that MPL misses but supports via alt names
-    content = content.replace(r'\impliedby', r'\Longleftarrow')
-    content = content.replace(r'\implies', r'\Longrightarrow')
-    content = content.replace(r'\iff', r'\Longleftrightarrow')
-
-    return content
 
 
 def print_buffered_line(line_buffer, cell_w, cell_h):
