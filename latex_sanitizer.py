@@ -62,6 +62,7 @@ def sanitize_for_fallback(latex_str):
         inner = inner[1:-1]
         
     # Suppress numbering
+    # We include flalign here to ensuring it's recognized as a block env
     env_pattern = r"\\begin{(align|equation|gather|dmath|multline|eqnarray|flalign)}"
     
     def replacer(match):
@@ -70,20 +71,17 @@ def sanitize_for_fallback(latex_str):
 
     if re.search(env_pattern, inner):
         final_latex = re.sub(env_pattern, replacer, inner)
-        final_latex = re.sub(r"\\end\{(align|equation|gather|dmath|multline|eqnarray|flalign)\}", lambda m: f"\\end{{{m.group(1)}*}}", final_latex)
+        final_latex = re.sub(r"\\end{(align|equation|gather|dmath|multline|eqnarray|flalign)}", lambda m: f"\\end{{{m.group(1)}*}}", final_latex)
     else:
         final_latex = inner
 
     # Remove Matplotlib specific hacks (rules/phantoms) as pdflatex doesn't need them
-    # and they can cause unnecessary height/width issues.
-    final_latex = re.sub(r'\\rule\{0pt\}\{[0-9.]*ex\}', '', final_latex)
-    final_latex = re.sub(r'\\vphantom\{[a-zA-Z0-9]*\}', '', final_latex)
+    final_latex = re.sub(r'\\rule{0pt}{[0-9.]*ex}', '', final_latex)
+    final_latex = re.sub(r'\\vphantom{[a-zA-Z0-9]*}', '', final_latex)
 
     # Ensure math mode if not an environment
-    # If we stripped the $ delimiters but the content is just a formula (not an environment),
-    # we must wrap it back in $ so pdflatex treats it as math.
-    # We also wrap in \mbox to prevent pdflatex from breaking the line mid-formula.
     if not final_latex.strip().startswith(r'\begin{'):
+        # Wrap in \mbox to prevent internal line breaking for inline math
         final_latex = f"\\mbox{{${final_latex}$}}"
         
     return final_latex
