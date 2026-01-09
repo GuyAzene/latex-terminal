@@ -65,14 +65,35 @@ def render_latex_fallback(latex_str, dpi=200, fontsize=14, color="#eeeeee", padd
         return None
 
     color_val = color.lstrip('#')
-
-    # Use the sanitizer logic for fallback rendering
+    
+    # Use the sanitizer logic for fallback rendering (handles environment substitution)
     final_latex = sanitize_for_fallback(latex_str)
+    
+    # Check if this is a block environment (starts with \begin) or inline math
+    if final_latex.strip().startswith(r'\begin{') :
+        # BLOCK MODE: Use 'standalone' with varwidth.
+        # This provides a text width context which is required for environments like 'flalign'
+        # to calculate spacing correctly, while still shrinking to fit the content.
+        tex_content = r"""
+\documentclass[varwidth=100in, border=0pt]{standalone}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[dvipsnames,svgnames,x11names]{xcolor}
+\usepackage{graphicx}
 
-    # CHANGE: Added 'geometry' package with huge paperwidth to prevent line wrapping
-    tex_content = r"""
+\begin{document}
+\fontsize{%f}{%f}\selectfont
+\definecolor{currcolor}{HTML}{%s}
+\color{currcolor}
+%s
+\end{document}
+""" % (fontsize, fontsize * 1.2, color_val, final_latex)
+    else:
+        # INLINE MODE: Use 'article' + 'preview'.
+        # This is robust for long inline formulas and prevents them from wrapping.
+        # We explicitly set a huge paper width to effectively disable line breaking.
+        tex_content = r"""
 \documentclass{article}
-\usepackage[paperwidth=500in, paperheight=100in, margin=0cm]{geometry}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage[dvipsnames,svgnames,x11names]{xcolor}
