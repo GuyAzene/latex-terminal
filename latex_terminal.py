@@ -65,15 +65,14 @@ def render_latex_fallback(latex_str, dpi=200, fontsize=14, color="#eeeeee", padd
         return None
 
     color_val = color.lstrip('#')
-    
-    # Use the sanitizer logic for fallback rendering (handles environment substitution)
+
+    # Use the sanitizer logic for fallback rendering
     final_latex = sanitize_for_fallback(latex_str)
-    
-    # Use standalone to get tight bounding box
-    # \fontsize{sz}{skip} sets the font size
-    # Add common color names support
+
+    # CHANGE: Added 'geometry' package with huge paperwidth to prevent line wrapping
     tex_content = r"""
 \documentclass{article}
+\usepackage[paperwidth=500in, paperheight=100in, margin=0cm]{geometry}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage[dvipsnames,svgnames,x11names]{xcolor}
@@ -83,15 +82,16 @@ def render_latex_fallback(latex_str, dpi=200, fontsize=14, color="#eeeeee", padd
 
 \begin{document}
 \fontsize{%f}{%f}\selectfont
+\begin{preview}
 \definecolor{currcolor}{HTML}{%s}
 \color{currcolor}
-\begin{preview}
 %s
 \end{preview}
 \end{document}
 """ % (fontsize, fontsize * 1.2, color_val, final_latex)
 
     with tempfile.TemporaryDirectory() as temp_dir:
+        # ... (rest of the function remains identical)
         tex_path = os.path.join(temp_dir, "equation.tex")
         pdf_path = os.path.join(temp_dir, "equation.pdf")
         png_path = os.path.join(temp_dir, "equation.png")
@@ -99,9 +99,6 @@ def render_latex_fallback(latex_str, dpi=200, fontsize=14, color="#eeeeee", padd
         with open(tex_path, "w", encoding="utf-8") as f:
             f.write(tex_content)
 
-        # Run pdflatex
-        # We allow it to fail (non-zero exit) as long as PDF is generated
-        # because of minor errors like undefined colors (which fallback to black) or font warnings.
         subprocess.run(
             ["pdflatex", "-interaction=nonstopmode", "-output-directory", temp_dir, tex_path],
             check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -110,7 +107,6 @@ def render_latex_fallback(latex_str, dpi=200, fontsize=14, color="#eeeeee", padd
         if not os.path.exists(pdf_path):
             return None
 
-        # Convert PDF to PNG
         pad_px = int(padding * dpi)
         cmd = ["convert", "-density", str(dpi), "-background", "none"]
         if pad_px > 0:
