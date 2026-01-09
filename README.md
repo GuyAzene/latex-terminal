@@ -6,7 +6,6 @@ A Python utility that renders LaTeX math equations directly in your terminal usi
 
 *   **Inline Math Rendering**: Renders LaTeX equations inline with text, automatically scaling and centering them to match the terminal's line height.
 *   **Block Math Rendering**: Renders larger, centered equations on their own lines with appropriate spacing.
-*   **BiDi Support**: Full support for Right-to-Left languages (Hebrew, Arabic) mixed with LaTeX. The script automatically detects direction and reorders text for correct display.
 *   **Kitty Graphics Protocol**: Utilizes the modern Kitty graphics protocol for high-quality image display in supported terminals (e.g., Kitty, WezTerm, Ghostty).
 *   **Smart Layout**:
     *   Prevents overlap between text and graphics.
@@ -20,8 +19,6 @@ A Python utility that renders LaTeX math equations directly in your terminal usi
 *   **Python 3.x**
 *   **Libraries**:
     *   `matplotlib`
-    *   `python-bidi`
-    *   `arabic-reshaper`
 *   **Terminal**: A terminal emulator that supports the Kitty graphics protocol (e.g., [Kitty](https://sw.kovidgoyal.net/kitty/), [WezTerm](https://wezfurlong.org/wezterm/), [Ghostty](https://ghostty.org/)).
 
 ## External Dependencies (Highly Recommended)
