@@ -6,6 +6,7 @@ A Python utility that renders LaTeX math equations directly in your terminal usi
 
 *   **Inline Math Rendering**: Renders LaTeX equations inline with text, automatically scaling and centering them to match the terminal's line height.
 *   **Block Math Rendering**: Renders larger, centered equations on their own lines with appropriate spacing.
+*   **BiDi Support**: Full support for Right-to-Left languages (Hebrew, Arabic) mixed with LaTeX. The script automatically detects direction and reorders text for correct display.
 *   **Kitty Graphics Protocol**: Utilizes the modern Kitty graphics protocol for high-quality image display in supported terminals (e.g., Kitty, WezTerm, Ghostty).
 *   **Smart Layout**:
     *   Prevents overlap between text and graphics.
@@ -19,13 +20,15 @@ A Python utility that renders LaTeX math equations directly in your terminal usi
 *   **Python 3.x**
 *   **Libraries**:
     *   `matplotlib`
+    *   `python-bidi`
+    *   `arabic-reshaper`
 *   **Terminal**: A terminal emulator that supports the Kitty graphics protocol (e.g., [Kitty](https://sw.kovidgoyal.net/kitty/), [WezTerm](https://wezfurlong.org/wezterm/), [Ghostty](https://ghostty.org/)).
 
-## External Dependencies (Optional but Recommended)
+## External Dependencies (Highly Recommended)
 
-For rendering complex LaTeX environments (like `align`, `gather`) or using advanced math symbols that `matplotlib` doesn't support, the script automatically falls back to system LaTeX tools.
+For rendering complex LaTeX environments (like `align`, `gather`) or specific symbols that cause clipping in Matplotlib (like `\impliedby`, `\iff`, `\implies`), the script automatically falls back to system LaTeX tools (`pdflatex`).
 
-If you don't install these, the script will attempt to render everything with `matplotlib`, which works for most standard equations but may fail on complex layouts.
+If you don't install these, standard math will still work via Matplotlib, but advanced layouts or wide arrow symbols may not render correctly.
 
 **Recommended for macOS:**
 ```bash
@@ -89,10 +92,11 @@ latex-terminal math.txt
 
 ## Configuration
 
-You can tweak the rendering parameters in `main.py`:
-*   `dpi`: Adjusts the resolution of the generated images.
-*   `fontsize`: Base font size for rendering.
-*   `padding`: Padding around the rendered equations.
+All configuration settings are located in `config.py`. You can adjust:
+
+*   **Margins**: `INLINE_MATH_MARGIN_TOP`, `BLOCK_MATH_MARGIN_TOP` (vertical spacing).
+*   **Padding**: `INLINE_MATH_PADDING`, `BLOCK_MATH_PADDING` (space around the image).
+*   **Scaling**: `INLINE_MATH_SCALE_FACTOR`, `BLOCK_MATH_FONT_SIZE`, `DPI` settings.
 
 ## Troubleshooting
 
