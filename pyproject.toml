@@ -1,6 +1,6 @@
 [project]
 name = "latex-terminal"
-version = "0.1.0"
+version = "0.1.1"
 description = "Terminal-native LaTeX rendering using the Kitty graphics protocol."
 readme = "README.md"
 requires-python = ">=3.10"
