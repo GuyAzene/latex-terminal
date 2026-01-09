@@ -148,6 +148,16 @@ def render_latex_to_png(latex_str, dpi=200, fontsize=14, color="#eeeeee", paddin
         0.5, 0.5, latex_str, fontsize=fontsize, color=color, ha="center", va="center"
     )
 
+    # Check for symbols known to be problematic in Matplotlib (clipping issues)
+    # and force fallback if system tools are available.
+    force_fallback_symbols = [r"\Longleftarrow", r"\Longrightarrow", r"\Longleftrightarrow"]
+    if any(sym in latex_str for sym in force_fallback_symbols):
+        fallback = render_latex_fallback(latex_str, dpi, fontsize, color, padding)
+        if fallback:
+             plt.close(fig)
+             buf.close()
+             return fallback
+
     try:
         fig.savefig(
             buf,
