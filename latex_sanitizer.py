@@ -74,6 +74,11 @@ def sanitize_for_fallback(latex_str):
     else:
         final_latex = inner
 
+    # Remove Matplotlib specific hacks (rules/phantoms) as pdflatex doesn't need them
+    # and they can cause unnecessary height/width issues.
+    final_latex = re.sub(r'\\rule\{0pt\}\{[0-9.]*ex\}', '', final_latex)
+    final_latex = re.sub(r'\\vphantom\{[a-zA-Z0-9]*\}', '', final_latex)
+
     # Ensure math mode if not an environment
     # If we stripped the $ delimiters but the content is just a formula (not an environment),
     # we must wrap it back in $ so pdflatex treats it as math.
