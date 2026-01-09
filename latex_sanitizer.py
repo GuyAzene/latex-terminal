@@ -1,5 +1,18 @@
 import re
 
+# Symbols that are known to render poorly (clipping, missing) in Matplotlib's engine.
+# If these are detected, we force the use of the system LaTeX renderer (pdflatex).
+FORCE_FALLBACK_SYMBOLS = {
+    r"\Longleftarrow", r"\Longrightarrow", r"\Longleftrightarrow",
+    r"\impliedby", r"\implies", r"\iff"
+}
+
+def requires_system_fallback(latex_str):
+    """
+    Checks if the LaTeX string contains symbols that require the system renderer.
+    """
+    return any(sym in latex_str for sym in FORCE_FALLBACK_SYMBOLS)
+
 def sanitize_latex(content):
     """
     Sanitizes LaTeX content to ensure compatibility with Matplotlib's mathtext engine

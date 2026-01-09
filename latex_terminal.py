@@ -17,8 +17,9 @@ import matplotlib
 # Force non-interactive backend
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from latex_sanitizer import sanitize_latex, sanitize_for_fallback
 
+import config
+from latex_sanitizer import sanitize_latex, sanitize_for_fallback, requires_system_fallback
 
 # --- FIX: Switch from 'cm' to 'stix' or 'dejavusans' to fix missing symbol errors ---
 try:
@@ -27,18 +28,6 @@ try:
 except Exception:
     matplotlib.rcParams["mathtext.fontset"] = "dejavusans"
     matplotlib.rcParams["font.family"] = "sans-serif"
-
-# Configuration
-INLINE_MATH_PADDING = 0.1
-INLINE_MATH_MARGIN_TOP = 0
-INLINE_MATH_MARGIN_BOTTOM = 0
-BLOCK_MATH_PADDING = 0.1
-BLOCK_MATH_MARGIN_TOP = 1
-BLOCK_MATH_MARGIN_BOTTOM = 1
-BLOCK_MATH_FONT_SIZE = 24
-INLINE_MATH_SCALE_FACTOR = 1.05
-INLINE_MATH_DPI = 200
-BLOCK_MATH_DPI = 200
 
 # Constants
 CHUNK_SIZE = 4096
@@ -150,11 +139,7 @@ def render_latex_to_png(latex_str, dpi=200, fontsize=14, color="#eeeeee", paddin
 
     # Check for symbols known to be problematic in Matplotlib (clipping issues)
     # and force fallback if system tools are available.
-    force_fallback_symbols = [
-        r"\Longleftarrow", r"\Longrightarrow", r"\Longleftrightarrow",
-        r"\impliedby", r"\implies", r"\iff"
-    ]
-    if any(sym in latex_str for sym in force_fallback_symbols):
+    if requires_system_fallback(latex_str):
         fallback = render_latex_fallback(latex_str, dpi, fontsize, color, padding)
         if fallback:
              plt.close(fig)
@@ -275,8 +260,8 @@ def print_buffered_line(line_buffer, cell_w, cell_h):
 
         elif item_type == 'math':
             has_math = True
-            scale_factor = INLINE_MATH_SCALE_FACTOR
-            target_dpi = INLINE_MATH_DPI
+            scale_factor = config.INLINE_MATH_SCALE_FACTOR
+            target_dpi = config.INLINE_MATH_DPI
             target_fontsize = (cell_h * scale_factor * 72) / target_dpi
 
             # Sanitize content inside the delimiters
@@ -286,7 +271,7 @@ def print_buffered_line(line_buffer, cell_w, cell_h):
 
             png_bytes = render_latex_to_png(
                 latex_wrapped, dpi=target_dpi, fontsize=target_fontsize,
-                color="#eeeeee", padding=INLINE_MATH_PADDING
+                color="#eeeeee", padding=config.INLINE_MATH_PADDING
             )
 
             if png_bytes:
@@ -317,8 +302,8 @@ def print_buffered_line(line_buffer, cell_w, cell_h):
                 rendered_items.append({'type': 'text', 'content': content})
 
     if has_math:
-        max_rows_up += INLINE_MATH_MARGIN_TOP
-        max_rows_down += INLINE_MATH_MARGIN_BOTTOM
+        max_rows_up += config.INLINE_MATH_MARGIN_TOP
+        max_rows_down += config.INLINE_MATH_MARGIN_BOTTOM
 
     if max_rows_up > 0:
         sys.stdout.write('\n' * max_rows_up)
@@ -392,8 +377,8 @@ def main():
             clean_content = sanitize_latex(seg[2:-2])
 
             png_bytes = render_latex_to_png(
-                f"${clean_content}$", dpi=BLOCK_MATH_DPI, fontsize=BLOCK_MATH_FONT_SIZE, 
-                color="#eeeeee", padding=BLOCK_MATH_PADDING
+                f"${clean_content}$", dpi=config.BLOCK_MATH_DPI, fontsize=config.BLOCK_MATH_FONT_SIZE, 
+                color="#eeeeee", padding=config.BLOCK_MATH_PADDING
             )
 
             if png_bytes:
@@ -416,7 +401,7 @@ def main():
                 )
                 
                 # Top Margin
-                for _ in range(BLOCK_MATH_MARGIN_TOP): sys.stdout.write("\n")
+                for _ in range(config.BLOCK_MATH_MARGIN_TOP): sys.stdout.write("\n")
 
                 # Reserve space for image
                 for _ in range(rows_needed): sys.stdout.write("\n")
@@ -432,7 +417,7 @@ def main():
                 
                 # Bottom Margin
                 sys.stdout.write("\r")
-                for _ in range(BLOCK_MATH_MARGIN_BOTTOM): sys.stdout.write("\n")
+                for _ in range(config.BLOCK_MATH_MARGIN_BOTTOM): sys.stdout.write("\n")
             else:
                 sys.stdout.write(seg + "\n")
 
