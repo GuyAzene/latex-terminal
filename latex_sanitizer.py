@@ -34,7 +34,6 @@ def sanitize_latex(content):
     
     # \impliedby (<==)
     content = content.replace(r'\\impliedby', r'\\Longleftarrow\\vphantom{A}')
-    
     # \implies (==>)
     content = content.replace(r'\\implies', r'\\Longrightarrow\\vphantom{A}')
     
@@ -61,7 +60,7 @@ def sanitize_for_fallback(latex_str):
     # We convert numbered environments (like 'align') to their starred versions (like 'align*').
     # Numbered equations produce (1), (2) on the right side, creating a very wide image
     # that scales down poorly in the terminal.
-    env_pattern = r"\\begin\{(align|equation|gather|dmath|multline|eqnarray)"}
+    env_pattern = r"\\begin\{(align|equation|gather|dmath|multline|eqnarray)"
     
     def replacer(match):
         env_name = match.group(1)

@@ -19,9 +19,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from latex_sanitizer import sanitize_latex, sanitize_for_fallback
 
-# Optional BiDi support
-try:
-    import arabic_reshaper
 
 # --- FIX: Switch from 'cm' to 'stix' or 'dejavusans' to fix missing symbol errors ---
 try:
