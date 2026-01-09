@@ -82,7 +82,8 @@ def sanitize_for_fallback(latex_str):
     # Ensure math mode if not an environment
     # If we stripped the $ delimiters but the content is just a formula (not an environment),
     # we must wrap it back in $ so pdflatex treats it as math.
+    # We also wrap in \mbox to prevent pdflatex from breaking the line mid-formula.
     if not final_latex.strip().startswith(r'\begin{'):
-        final_latex = f"${final_latex}$"
+        final_latex = f"\\mbox{{${final_latex}$}}"
         
     return final_latex
