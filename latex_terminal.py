@@ -27,12 +27,9 @@ except Exception:
     matplotlib.rcParams["font.family"] = "sans-serif"
 
 # Configuration
-INLINE_MATH_PADDING = 0.1
+INLINE_MATH_PADDING = 0.05
 INLINE_MATH_MARGIN_TOP = 0
 INLINE_MATH_MARGIN_BOTTOM = 0
-INLINE_MATH_SCALE_FACTOR = 1.0
-INLINE_MATH_DPI = 200
-
 BLOCK_MATH_PADDING = 0.1
 BLOCK_MATH_MARGIN_TOP = 1
 BLOCK_MATH_MARGIN_BOTTOM = 0
@@ -287,6 +284,11 @@ def sanitize_latex(content):
     content = content.replace(r'\right\rvert', r'\right|')
     content = content.replace(r'\lvert', '|')
     content = content.replace(r'\rvert', '|')
+
+    # Map common arrows that MPL misses but supports via alt names
+    content = content.replace(r'\impliedby', r'\Longleftarrow')
+    content = content.replace(r'\implies', r'\Longrightarrow')
+    content = content.replace(r'\iff', r'\Longleftrightarrow')
 
     return content
 
