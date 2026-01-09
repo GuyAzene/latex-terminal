@@ -36,7 +36,7 @@ brew install imagemagick
 
 ## Installation
 
-This project is best installed and managed using [uv](https://github.com/astral-sh/uv).
+To install `latex-terminal` as a global command-line tool using `uv`:
 
 1.  Clone the repository:
     ```bash
@@ -44,15 +44,11 @@ This project is best installed and managed using [uv](https://github.com/astral-
     cd latex-terminal
     ```
 
-2.  Sync dependencies using `uv`:
+2.  Install the tool:
     ```bash
-    uv sync
+    uv tool install .
     ```
-
-3.  Run the application:
-    ```bash
-    uv run main.py 'Here is some math: $E=mc^2$'
-    ```
+    (Ensure your uv bin directory is in your PATH).
 
 ## Usage
 
@@ -63,7 +59,7 @@ You can run the script by passing the text directly or by providing a file path.
 **Note:** Always use single quotes (`'`) around text with `$` signs to prevent your shell from interpreting them as variables.
 
 ```bash
-uv run main.py 'Here is some inline math: $E=mc^2$. And here is a block equation: $$ \int_{0}^{\infty} e^{-x^2} dx = \frac{\sqrt{\pi}}{2} $$'
+latex-terminal 'Here is some inline math: $E=mc^2$. And here is a block equation: $$ \int_{0}^{\infty} e^{-x^2} dx = \frac{\sqrt{\pi}}{2} $$'
 ```
 
 ### File Input
@@ -79,7 +75,7 @@ $$ ax^2 + bx + c = 0 $$
 Then run:
 
 ```bash
-uv run main.py math.txt
+latex-terminal math.txt
 ```
 
 ## How It Works
