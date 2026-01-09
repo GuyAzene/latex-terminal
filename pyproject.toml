@@ -12,8 +12,6 @@ classifiers = [
 ]
 dependencies = [
     "matplotlib>=3.8.0",
-    "python-bidi>=0.4.2",
-    "arabic-reshaper>=3.0.0",
 ]
 
 [project.scripts]
