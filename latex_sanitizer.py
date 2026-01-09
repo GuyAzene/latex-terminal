@@ -70,8 +70,14 @@ def sanitize_for_fallback(latex_str):
 
     if re.search(env_pattern, inner):
         final_latex = re.sub(env_pattern, replacer, inner)
-        final_latex = re.sub(r"\\end{(align|equation|gather|dmath|multline|eqnarray)}", lambda m: f"\\end{{{m.group(1)}*}}", final_latex)
+        final_latex = re.sub(r"\\end\{(align|equation|gather|dmath|multline|eqnarray)\}", lambda m: f"\\end{{{m.group(1)}*}}", final_latex)
     else:
         final_latex = inner
+
+    # Ensure math mode if not an environment
+    # If we stripped the $ delimiters but the content is just a formula (not an environment),
+    # we must wrap it back in $ so pdflatex treats it as math.
+    if not final_latex.strip().startswith(r'\begin{'):
+        final_latex = f"${final_latex}$"
         
     return final_latex
